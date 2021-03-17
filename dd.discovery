@@ -1,0 +1,192 @@
+#!/usr/bin/python3
+# -*- coding: ISO-8859-1 -*-
+
+"""
+Idealizador: Isaque Profeta
+Telegram: @aizacks
+
+Atualizado/Ajustado/Aprimorado: Sansão Simonton
+Telegram: @sansaoipb
+"""
+
+### Bibliotecas padrão do python
+import json
+import re
+import sys
+import html
+
+### Bibliotecas instaladas via pip
+# python3 -m pip install --ignore-installed cloudscraper scrapy "PyYAML>=5.1"
+
+from cloudscraper import create_scraper
+from scrapy import Selector
+import yaml
+
+# URL do downdetector porque as monitorações variam para cada país
+downdetector_url = 'https://downdetector.com.br'
+
+# Mensagens de erro
+erro_de_conexao = 'Não é possível coletar, falha de conexão ao downdetector!'
+erro_de_parse = 'Não é possível coletar, html do site downdetector alterado!'
+
+# Instância do Scrapper
+scraper = create_scraper()
+
+# Crio a lista final dos serviços e coletas para transformar em JSON
+services = []
+
+# Executo o scraper para a página de status que tem a lista dos serviços
+try:
+    get_list = scraper.get(f'{downdetector_url}/status').text
+except Exception as e:
+    print(erro_de_conexao)
+    print(e)
+    exit()
+
+# Filtro o local da lista específica de serviços
+try:
+    getFull = Selector(text=get_list)
+except Exception as e:
+    print(erro_de_parse)
+    print(e)
+    exit()
+
+dictStatus = {'success': 1, 'warning': 2, 'danger': 3}
+
+servicos_monitorados = [f"{serviceKey}".lower().strip() for serviceKey in sys.argv[1].split(",")]
+
+services_list = getFull.css('div.main-container').xpath('./div/div/ul').xpath('./li/a')
+
+Application = ""
+# Faço um loop em cima de todos os itens da lista de serviços
+for href in services_list:
+    # Busco nome do serviço limpo
+    service_sanitized = href.attrib['href'].split('/')[2].replace('-', '_')
+
+    if service_sanitized in servicos_monitorados:
+        # Inicializo o dicionário específico do serviço
+        service = {}
+        service['status'] = []
+        service['errors'] = []
+        service['problems'] = []
+
+        # Executo o scraper para a página de status do serviço atual
+        try:
+            site = downdetector_url + href.attrib['href']
+            get_items = scraper.get(site).text
+        except Exception as e:
+            print(erro_de_conexao)
+            print(e)
+            exit()
+
+        # Busco o nome da aplicação e caminho da url de serviço
+        try:
+            Application = href.xpath('./text()').get()
+        except Exception as e:
+            print(erro_de_parse)
+            print(e)
+            exit()
+
+        # Busco o status do serviço
+        try:
+            getFull = Selector(text=get_items)
+            statusRAW = getFull.xpath('//div[@id="company"]').css('div.entry-title::text').get()
+
+            status = re.sub(r'\n +', '', statusRAW)
+
+            statusFull = getFull.xpath('//div[@id="chart-row"]').css('script[type="text/javascript"]::text').get()
+
+            statusYaml = statusFull.split('=', 1)[1].split("$", 1)[0]
+            statusDict = yaml.load(statusYaml, Loader=yaml.FullLoader)
+
+            statusId = statusDict['status']
+            status_id = dictStatus[statusId]
+            sep = 'problemas'
+            status = f"{status.strip().split(f'{sep} ')[0]}{sep}"
+
+            Json = json.loads(getFull.css('script[type="application/ld+json"]::text').extract_first())
+            url = Json['url'].split("/")[2]
+
+            notificationData = statusDict['series']['reports']['data']
+            indexValue = len(notificationData) - 1
+            notificationValue = notificationData[indexValue]['y']
+
+            service_status = {}
+            service_status['key'] = service_sanitized
+            service_status['status'] = status
+            service_status['status_id'] = status_id
+            service_status['description'] = html.unescape(Json['description'])
+            service_status['application_name'] = Application
+            service_status['notification'] = notificationValue
+
+            if 'Telegram' == Application:
+                url = f"api.{url}"
+
+            elif 'Skype' == Application:
+                url = url.replace("www", "web")
+
+            service_status['url'] = url
+
+            service['status'].append(service_status)
+        except Exception as e:
+            print(erro_de_parse)
+            print(e)
+            exit()
+
+        # Filtro o local da lista específica de erros em serviços
+        try:
+            services_errors = getFull.xpath('//div[@id="indicators-card"]/div').css('div.row').xpath('./div/div')
+        except Exception as e:
+            print(erro_de_parse)
+            print(e)
+            exit()
+
+        # Faço um loop em cima de todos os itens de erros em serviços
+        for error in services_errors:
+            try:
+                error_description = re.sub(
+                    r'\n +', '', error.css('div.text-muted::text').get()
+                )
+                pooling_value = re.sub(
+                    r'\n +', '', error.css(
+                        'div.font-weight-bold::text').get()
+                ).replace('\xa0', '').replace('%', '')
+            except Exception as e:
+                print(erro_de_parse)
+                print(e)
+                exit()
+
+            error_sanitized = re.sub(
+                r'[^A-Za-z0-9]+', '', error_description
+            ).lower()
+
+            service_errors = {}
+            service_errors['error_name'] = error_description
+            service_errors['error_key'] = (service_sanitized + '_' + error_sanitized)
+            service_errors['error_value'] = pooling_value
+            service_errors['application_name'] = Application
+
+            service['errors'].append(service_errors)
+
+        # Filtro o local da lista específica de erros em serviços
+        try:
+            problems = getFull.xpath('//div[@id="articles-card"]/a/span/text()').get()
+        except Exception as e:
+            print(erro_de_parse)
+            print(e)
+            exit()
+
+        if problems:
+            service_problems = {}
+            service_problems['problem_status'] = 'Problemas resolvidos'
+            service_problems['problem_key'] = ('problem_' + service_sanitized)
+            service_problems['problem_value'] = problems.replace(':', '')
+            service_problems['application_name'] = Application
+
+            service['problems'].append(service_problems)
+
+        # Adiciono o serviço na lista final
+        services.append(service)
+
+# Apresento a lista final no formato JSON que o LLD espera
+print(json.dumps(services, ensure_ascii=False))
