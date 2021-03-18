@@ -35,39 +35,17 @@ scraper = create_scraper()
 # Crio a lista final dos serviços e coletas para transformar em JSON
 services = []
 
-# Executo o scraper para a página de status que tem a lista dos serviços
-try:
-    get_list = scraper.get(f'{downdetector_url}/status').text
-except Exception as e:
-    print(erro_de_conexao)
-    print(e)
-    exit()
-
-# Filtro o local da lista específica de serviços
-try:
-    getFull = Selector(text=get_list)
-except Exception as e:
-    print(erro_de_parse)
-    print(e)
-    exit()
-
 dictStatus = {'success': 1, 'warning': 2, 'danger': 3}
 
 servicos_monitorados = [f"{serviceKey}".lower().strip() for serviceKey in sys.argv[1].split(",")]
-
-services_list = getFull.css('div.main-container').xpath('./div/div/ul').xpath('./li/a')
 
 Application = ""
 listaEstaveis = []
 listaInstaveis = []
 listaProblems = []
 
-# Faço um loop em cima de todos os itens da lista de serviços
-for href in services_list:
-    # Busco nome do serviço limpo
-    service_sanitized = href.attrib['href'].split('/')[2]
-
-    if service_sanitized in servicos_monitorados:
+# Faço um loop em cima da lista de serviços
+for service_sanitized in servicos_monitorados:
         # Inicializo o dicionário específico do serviço
         service = {}
         service['status'] = []
@@ -76,21 +54,14 @@ for href in services_list:
 
         # Executo o scraper para a página de status do serviço atual
         try:
-            site = downdetector_url + href.attrib['href']
+            site = f"{downdetector_url}/fora-do-ar/{service_sanitized}"
             get_items = scraper.get(site).text
         except Exception as e:
             print(erro_de_conexao)
             print(e)
             exit()
 
-        # Busco o nome da aplicação e caminho da url de serviço
-        try:
-            Application = href.xpath('./text()').get()
-        except Exception as e:
-            print(erro_de_parse)
-            print(e)
-            exit()
-
+        service_sanitized = service_sanitized.replace("-", "_")
         # Busco o status do serviço
         try:
             getFull = Selector(text=get_items)
@@ -120,6 +91,7 @@ for href in services_list:
 
             Json = json.loads(getFull.css('script[type="application/ld+json"]::text').extract_first())
             url = Json['url'].split("/")[2]
+            Application = Json['name']
 
             notificationData = statusDict['series']['reports']['data']
             indexValue = len(notificationData) - 1
