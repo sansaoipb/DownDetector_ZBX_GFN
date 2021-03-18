@@ -58,10 +58,14 @@ servicos_monitorados = [f"{serviceKey}".lower().strip() for serviceKey in sys.ar
 services_list = getFull.css('div.main-container').xpath('./div/div/ul').xpath('./li/a')
 
 Application = ""
+listaEstaveis = []
+listaInstaveis = []
+listaProblems = []
+
 # Faço um loop em cima de todos os itens da lista de serviços
 for href in services_list:
     # Busco nome do serviço limpo
-    service_sanitized = href.attrib['href'].split('/')[2].replace('-', '_')
+    service_sanitized = href.attrib['href'].split('/')[2]
 
     if service_sanitized in servicos_monitorados:
         # Inicializo o dicionário específico do serviço
@@ -101,6 +105,16 @@ for href in services_list:
 
             statusId = statusDict['status']
             status_id = dictStatus[statusId]
+
+            if status_id == 1:
+                listaEstaveis.append(status_id)
+
+            elif status_id == 2:
+                listaInstaveis.append(status_id)
+
+            elif status_id == 3:
+                listaProblems.append(status_id)
+
             sep = 'problemas'
             status = f"{status.strip().split(f'{sep} ')[0]}{sep}"
 
@@ -188,5 +202,11 @@ for href in services_list:
         # Adiciono o serviço na lista final
         services.append(service)
 
+services_total = {}
+services_total['services_ok'] = len(listaEstaveis)
+services_total['services_problems'] = len(listaProblems) + len(listaInstaveis)
+services_total['services_total'] = len(servicos_monitorados)
+
+services.append(services_total)
 # Apresento a lista final no formato JSON que o LLD espera
 print(json.dumps(services, ensure_ascii=False))
