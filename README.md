@@ -32,8 +32,6 @@ Instale os pacotes:
 <pre>python3 -m pip install --ignore-installed cloudscraper scrapy "PyYAML>=5.1"</pre>
 
 
-<!--
--->
 # Zabbix:
 
 <b>OBS:</b><br>
@@ -43,6 +41,8 @@ compilando (<code>/usr/local/share/zabbix/externalscripts/</code>) ou por pacote
 Acesse o local existente e adicione o script <code>dd.discovery</code>, e execute os comandos:
 
 <pre>chown zabbix. dd.discovery ; chmod +x dd.discovery</pre>
+
+<!--
 
 <h3>
 Template:
@@ -56,3 +56,9 @@ Dashboard Grafana:
 </h3>
 
 Aguarde, será disponibilizado em breve
+-->
+
+<h3>
+Template e Dashboard Grafana no curso abaixo:
+</h3>
+https://formulamonitoramentozabbix.com.br/cursosgratuitos
