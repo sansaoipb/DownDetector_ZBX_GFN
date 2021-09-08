@@ -1,3 +1,10 @@
+# ⚠️Problema conhecido sem solução (captcha) ⚠️
+<code>
+<b>
+cloudscraper.exceptions.CloudflareChallengeError: Detected a Cloudflare version 2 Captcha challenge, This feature is not available in the opensource (free) version.
+</b>
+</code>
+
 # Doações
 <table>
     <tr>
